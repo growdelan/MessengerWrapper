@@ -13,7 +13,12 @@ Lekka aplikacja macOS, która owija `messenger.com` w natywne okno SwiftUI/WebKi
 - Lokal­ne powiadomienia (alert + dźwięk + badge) gdy rośnie liczba nieprzeczytanych.
 - Blokowanie otwierania linków zewnętrznych w aplikacji — są przekazywane do domyślnej przeglądarki.
 
-## Wymagania
+## Instalacja
+
+Paczka zip z [Releases](https://github.com/growdelan/MessengerWrapper/releases)  
+Rozpoakować do `/Applications/` 
+
+## Wymagania do samodzielnego budowania
 - macOS z Xcode (testowane z nowszymi wersjami Xcode i SDK macOS).
 - Dostęp do internetu dla `messenger.com` i hostów statycznych Facebooka.
 
