@@ -1,0 +1,41 @@
+name: macOS Release (MessengerWrapper)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build .app (Release)
+        env:
+          SCHEME: MessengerWrapper
+        run: |
+          set -euo pipefail
+          xcodebuild -scheme "$SCHEME" -configuration Release \
+            -sdk macosx -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Zip .app
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find build/Build/Products/Release -maxdepth 1 -name "*.app" -print -quit)"
+          echo "Found app: $APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "MessengerWrapper-macos.zip"
+
+      - name: Create GitHub Release + upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MessengerWrapper-macos.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
