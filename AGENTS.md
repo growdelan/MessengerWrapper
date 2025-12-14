@@ -6,19 +6,19 @@ Repozytorium to natywna aplikacja macOS w SwiftUI. Kod źródłowy znajduje się
 - `AppDelegate.swift` – logika paska menu, obsługa okna i zakończenia aplikacji.
 - `ContentView.swift` i `MessengerWebView.swift` – widok główny oraz wrapper WebKit z obsługą badge i powiadomień.
 - `Notifications.swift` – wspólne nazwy powiadomień (np. zmiana licznika nieprzeczytanych).
-- `Assets.xcassets` – zasoby graficzne.  
-Konfiguracja projektu jest w `MessengerWrapper.xcodeproj`. Brak obecnie katalogu testów; nowe testy umieszczaj w `MessengerWrapperTests/` tworząc osobny target XCTest.
+- `Assets.xcassets` – zasoby graficzne, w tym `MenuBarIcon.imageset` dla paska menu (template image + licznik tekstowy).  
+Konfiguracja: `MessengerWrapper.xcodeproj`; testy w `MessengerWrapperTests/` (target XCTest).
 
 ## Budowa, testy i rozwój
-- Uruchomienie w Xcode: `open MessengerWrapper.xcodeproj`, wybierz scheme `MessengerWrapper`, Build (`⌘B`) lub Run (`⌘R`) na platformie macOS.
-- Build z CLI (zalecane z local DerivedData): `xcodebuild -project MessengerWrapper.xcodeproj -scheme MessengerWrapper -configuration Debug -destination 'platform=macOS' -derivedDataPath ./_DerivedData build`.
-- Testy (po dodaniu targetu testowego): `xcodebuild -project MessengerWrapper.xcodeproj -scheme MessengerWrapper -destination 'platform=macOS' test`.
+- Xcode: `open MessengerWrapper.xcodeproj`, scheme `MessengerWrapper`, build/run (`⌘B`/`⌘R`).
+- CLI: `xcodebuild -project MessengerWrapper.xcodeproj -scheme MessengerWrapper -configuration Debug -destination 'platform=macOS' -derivedDataPath ./_DerivedData build`.
+- Testy (po dodaniu targetu): `xcodebuild -project MessengerWrapper.xcodeproj -scheme MessengerWrapper -destination 'platform=macOS' test`.
 
 ## Styl kodu i nazewnictwo
-- Swift styl domyślny: wcięcia 4 spacje, linie zwięzłe, unikanie siły unwrapowania.
-- Nazwy typów w `UpperCamelCase`, właściwości i funkcje w `lowerCamelCase`; pliki nazwij jak typ wiodący.
-- Komentarze krótkie, opisują „dlaczego”.
-- Brak skonfigurowanego lint/format; używaj Xcode „Re-Indent”/„Format” przed commitem.
+- Swift: wcięcia 4 spacje, unikanie siły unwrapowania.
+- Typy w `UpperCamelCase`, właściwości/funkcje w `lowerCamelCase`; plik = typ wiodący.
+- Komentarze zwięzłe, opisują „dlaczego”; język wg kontekstu.
+- Brak lint/format; używaj Xcode „Re-Indent”/„Format” przed commitem.
 
 ## Wytyczne testów
 - Dodawaj testy jednostkowe w XCTest dla nowej logiki (np. parsowanie licznika nieprzeczytanych, routing URLi). Pliki nazywaj `NazwaKlasTests.swift`.
@@ -26,13 +26,14 @@ Konfiguracja projektu jest w `MessengerWrapper.xcodeproj`. Brak obecnie katalogu
 - Utrzymuj szybkie, hermetyczne testy; unikaj zależności od sieci zewnętrznej.
 
 ## Commit i pull requesty
-- Obecna historia używa zwięzłych tytułów (np. „add: git ignore”, „Initial Commit”). Preferuj tryb rozkazujący i krótkie prefiksy zakresu (`add:`, `fix:`, `chore:`) gdy pomaga.
-- Każdy PR powinien zawierać: krótki opis zmiany, motywację/problem, kroki weryfikacji (komenda build/test), oraz zrzuty ekranu UI jeśli zmieniasz interfejs.
-- Linkuj do powiązanych zadań/issue i wspomnij o ewentualnych regresjach lub ograniczeniach.
+- Historia używa krótkich tytułów (np. „add: git ignore”); preferuj tryb rozkazujący i prefiksy (`add:`, `fix:`, `chore:`) gdy to porządkuje zakres.
+- PR: krótki opis, motywacja/problem, kroki weryfikacji (build/test), zrzuty ekranu przy zmianach UI.
+- Linkuj zadania/issue; zaznacz znane ograniczenia/regresje.
 
 ## Uwagi platformowe i bezpieczeństwo
 - Aplikacja korzysta z WebKit, powiadomień i badge Docka; pamiętaj o aktualizacji `allowedHosts` w `MessengerWebView.swift` przy zmianach routingu.
 - Licznik nieprzeczytanych jest odświeżany natywnie (polling `document.title`) i rozsyłany przez `NotificationCenter` (`messengerWrapper.unreadCountDidChange`) do UI status bar oraz Dock badge.
+- Ikona paska menu to template `MenuBarIcon` z asset catalogu; liczba nieprzeczytanych dodawana jest w tytule obok ikony (status item ma `variableLength`).
 - WebKit może logować ostrzeżenia o braku entitlements dla “WebKit Media Playback” — zazwyczaj są nieszkodliwe, o ile nie używasz rozmów audio/wideo.
 - Nie commituj prywatnych tokenów ani danych logowania; cookies i sesje są trzymane lokalnie w `WKWebsiteDataStore.default()`.
 - Przy zmianach polityki powiadomień lub ikon status bar zadbaj o zachowanie dotychczasowego UX (status bar + okno możliwe do ukrycia).

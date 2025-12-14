@@ -4,8 +4,8 @@ Lekka aplikacja macOS, która owija `messenger.com` w natywne okno SwiftUI/WebKi
 
 ## Funkcje
 - Natywne okno SwiftUI z WebKit (bez Electron).
-- Ikona w pasku menu umożliwiająca szybkie pokazywanie/ukrywanie okna oraz wyjście z aplikacji.
-- Badge Docka z liczbą nieprzeczytanych wiadomości (pobieraną z tytułu strony).
+- Ikona template w pasku menu + licznik nieprzeczytanych obok niej; menu z akcjami pokaż/zakończ.
+- Badge Docka z liczbą nieprzeczytanych (parsowany tytuł strony).
 - Lokal­ne powiadomienia (alert + dźwięk + badge) gdy rośnie liczba nieprzeczytanych.
 - Blokowanie otwierania linków zewnętrznych w aplikacji — są przekazywane do domyślnej przeglądarki.
 
@@ -18,12 +18,12 @@ Lekka aplikacja macOS, która owija `messenger.com` w natywne okno SwiftUI/WebKi
 2. Wybierz schemat `MessengerWrapper` i platformę macOS.
 3. Uruchom (`⌘R`) lub zbuduj (`⌘B`).  
 Alternatywnie z CLI:  
-`xcodebuild -project MessengerWrapper.xcodeproj -scheme MessengerWrapper -destination 'platform=macOS' build`
+`xcodebuild -project MessengerWrapper.xcodeproj -scheme MessengerWrapper -destination 'platform=macOS' -derivedDataPath ./_DerivedData build`
 
 ## Uprawnienia i zachowanie
 - Powiadomienia: przy pierwszym uruchomieniu aplikacja poprosi o pozwolenie (`UNUserNotificationCenter`); odrzucenie wyłącza alerty, ale nie psuje działania.
 - Sesja: cookies i dane strony są trzymane lokalnie w `WKWebsiteDataStore.default()`.
-- Status bar: emoji 💬 można zamienić na SF Symbol w `AppDelegate`.
+- Status bar: wykorzystywany jest asset `MenuBarIcon` (template); licznik dodawany jest w tytule obok ikony.
 - Ukrywanie okna: zamknięcie okna chowa je zamiast kończyć aplikację; wyjście dostępne z menu paska.
 
 ## Struktura projektu
@@ -33,4 +33,4 @@ Alternatywnie z CLI:
 
 ## Dostosowanie
 - Dozwolone hosty linków zewnętrznych znajdują się w `MessengerWebView.swift` (`allowedHosts`); aktualizuj przy zmianach routingu.
-- Logikę parsowania liczby nieprzeczytanych (JS wstrzykiwany w WebView) można dostroić, jeśli Messenger zmieni strukturę tytułu strony.
+- Licznik nieprzeczytanych jest parsowany natywnie z `document.title` (regex na formatach `(3) Messenger`/`Messenger (3)`); dostrój, jeśli Messenger zmieni tytuł.

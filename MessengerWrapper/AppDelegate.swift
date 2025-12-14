@@ -5,7 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem?
     private weak var mainWindow: NSWindow?
     private var unreadObserver: NSObjectProtocol?
-    private let statusItemBaseTitle = "💬"
+    private let statusItemBaseTitle = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Aplikacja ma działać dalej po zamknięciu ostatniego okna
@@ -40,20 +40,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem?.button?.title = statusItemBaseTitle  // możesz podmienić na ikonę SF Symbols
+
+        if let button = statusItem?.button {
+            button.image = NSImage(named: "MenuBarIcon")
+            button.image?.isTemplate = true
+            button.imageScaling = .scaleProportionallyUpOrDown
+            button.imagePosition = .imageLeading
+            button.title = statusItemBaseTitle
+        }
 
         let menu = NSMenu()
-
-        let show = NSMenuItem(title: "Pokaż Messenger", action: #selector(showApp), keyEquivalent: "")
-        show.target = self
-        menu.addItem(show)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let quit = NSMenuItem(title: "Zakończ", action: #selector(quitApp), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
-
+        menu.addItem(withTitle: "Pokaż Messenger", action: #selector(showApp), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Zakończ", action: #selector(quitApp), keyEquivalent: "q")
         statusItem?.menu = menu
     }
 
@@ -70,7 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func updateStatusItemTitle(unread: Int) {
-        statusItem?.button?.title = unread > 0 ? "\(statusItemBaseTitle) \(unread)" : statusItemBaseTitle
+        statusItem?.length = NSStatusItem.variableLength
+        statusItem?.button?.title = unread > 0 ? " \(unread)" : statusItemBaseTitle
     }
 
     @objc private func showApp() {
