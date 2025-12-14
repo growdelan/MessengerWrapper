@@ -5,7 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem?
     private weak var mainWindow: NSWindow?
     private var unreadObserver: NSObjectProtocol?
-    private let statusItemBaseTitle = "💬"
+    private let statusItemBaseTitle = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Aplikacja ma działać dalej po zamknięciu ostatniego okna
@@ -39,13 +39,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
             button.image = NSImage(named: "MenuBarIcon")
             button.image?.isTemplate = true
             button.imageScaling = .scaleProportionallyUpOrDown
-            button.title = ""
+            button.imagePosition = .imageLeading
+            button.title = statusItemBaseTitle
         }
 
         let menu = NSMenu()
@@ -68,7 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func updateStatusItemTitle(unread: Int) {
-        statusItem?.button?.title = unread > 0 ? "\(statusItemBaseTitle) \(unread)" : statusItemBaseTitle
+        statusItem?.length = NSStatusItem.variableLength
+        statusItem?.button?.title = unread > 0 ? " \(unread)" : statusItemBaseTitle
     }
 
     @objc private func showApp() {
