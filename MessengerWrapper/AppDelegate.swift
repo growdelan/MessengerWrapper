@@ -4,6 +4,8 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem?
     private weak var mainWindow: NSWindow?
+    private var unreadObserver: NSObjectProtocol?
+    private let statusItemBaseTitle = "💬"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Aplikacja ma działać dalej po zamknięciu ostatniego okna
@@ -11,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Jeśli chcesz ZOSTAWIĆ ikonę w Docku, zakomentuj linię wyżej.
 
         setupStatusItem()
+        startUnreadObserver()
         hookMainWindowWhenReady()
     }
 
@@ -37,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem?.button?.title = "💬"  // możesz podmienić na ikonę SF Symbols
+        statusItem?.button?.title = statusItemBaseTitle  // możesz podmienić na ikonę SF Symbols
 
         let menu = NSMenu()
 
@@ -52,6 +55,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(quit)
 
         statusItem?.menu = menu
+    }
+
+    private func startUnreadObserver() {
+        unreadObserver = NotificationCenter.default.addObserver(
+            forName: .messengerWrapperUnreadCountDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            let unread = (notification.userInfo?["unread"] as? Int) ?? 0
+            self.updateStatusItemTitle(unread: unread)
+        }
+    }
+
+    private func updateStatusItemTitle(unread: Int) {
+        statusItem?.button?.title = unread > 0 ? "\(statusItemBaseTitle) \(unread)" : statusItemBaseTitle
     }
 
     @objc private func showApp() {

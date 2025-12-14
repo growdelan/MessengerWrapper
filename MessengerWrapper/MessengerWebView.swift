@@ -7,54 +7,17 @@ struct MessengerWebView: NSViewRepresentable {
     let url: URL
 
     func makeNSView(context: Context) -> WKWebView {
-        // 1) Konfiguracja WebView
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default() // trzyma cookies/sesję
 
-        // Kanał JS -> native (badge/unread)
-        let contentController = WKUserContentController()
-        contentController.add(context.coordinator, name: "unreadCount")
-
-        // 2) JS: odczyt "unread" co 5s i wysłanie do native
-        // Heurystyka: próba z document.title + fallback (możesz dopracować selektory DOM)
-        let js = """
-        (function() {
-          function parseUnreadFromTitle() {
-            // Czasem tytuł wygląda jak "(3) Messenger" albo "Messenger (3)" — zależy od wdrożeń
-            const t = document.title || "";
-            const m1 = t.match(/^\\((\\d+)\\)/);
-            if (m1) return parseInt(m1[1], 10);
-            const m2 = t.match(/\\((\\d+)\\)\\s*$/);
-            if (m2) return parseInt(m2[1], 10);
-            return 0;
-          }
-
-          function tick() {
-            const unread = parseUnreadFromTitle();
-            try {
-              window.webkit.messageHandlers.unreadCount.postMessage({ unread });
-            } catch (e) {}
-          }
-
-          // start
-          tick();
-          setInterval(tick, 5000);
-        })();
-        """
-
-        let userScript = WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        contentController.addUserScript(userScript)
-        config.userContentController = contentController
-
-        // 3) WebView
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
+        context.coordinator.attach(webView: webView)
 
         // Opcjonalnie: sensowny UA (czasem pomaga, gdy serwis wykrywa "in-app browser")
         // webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
-        // 4) Load
         webView.load(URLRequest(url: url))
         return webView
     }
@@ -65,7 +28,9 @@ struct MessengerWebView: NSViewRepresentable {
         Coordinator()
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        private weak var webView: WKWebView?
+        private var pollTimer: Timer?
         private var lastUnread: Int = 0
         private var notificationPermissionAsked = false
         private let allowedHosts: Set<String> = [
@@ -77,9 +42,18 @@ struct MessengerWebView: NSViewRepresentable {
             "scontent.xx.fbcdn.net"  // czasem zasoby
         ]
 
+        deinit {
+            pollTimer?.invalidate()
+        }
+
+        func attach(webView: WKWebView) {
+            self.webView = webView
+        }
+
         // MARK: - WKNavigationDelegate
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             requestNotificationsIfNeeded()
+            startUnreadPollingIfNeeded()
         }
 
         // MARK: - WKUIDelegate (otwieranie nowych okienek jako nowe karty/okna)
@@ -121,25 +95,70 @@ struct MessengerWebView: NSViewRepresentable {
             decisionHandler(.allow)
         }
 
-        // MARK: - WKScriptMessageHandler (JS -> native)
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.name == "unreadCount",
-                  let dict = message.body as? [String: Any],
-                  let unread = dict["unread"] as? Int else { return }
+        // MARK: - Unread polling (native)
+        private func startUnreadPollingIfNeeded() {
+            guard pollTimer == nil else { return }
+            guard let webView else { return }
 
+            let timer = Timer(timeInterval: 5.0, repeats: true) { [weak self, weak webView] _ in
+                guard let self, let webView else { return }
+                self.pollUnreadCount(using: webView)
+            }
+            pollTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+
+            pollUnreadCount(using: webView)
+        }
+
+        private func pollUnreadCount(using webView: WKWebView) {
+            webView.evaluateJavaScript("document.title") { [weak self] result, _ in
+                guard let self else { return }
+                guard let title = result as? String else { return }
+                let unread = self.parseUnreadFromTitle(title)
+                self.handleUnreadUpdate(unread)
+            }
+        }
+
+        private func parseUnreadFromTitle(_ title: String) -> Int {
+            let nsRange = NSRange(title.startIndex..<title.endIndex, in: title)
+
+            if let match = Self.leadingUnreadRegex.firstMatch(in: title, range: nsRange),
+               match.numberOfRanges > 1,
+               let range = Range(match.range(at: 1), in: title) {
+                return Int(title[range]) ?? 0
+            }
+
+            if let match = Self.trailingUnreadRegex.firstMatch(in: title, range: nsRange),
+               match.numberOfRanges > 1,
+               let range = Range(match.range(at: 1), in: title) {
+                return Int(title[range]) ?? 0
+            }
+
+            return 0
+        }
+
+        private func handleUnreadUpdate(_ unread: Int) {
             updateDockBadge(unread)
+            NotificationCenter.default.post(
+                name: .messengerWrapperUnreadCountDidChange,
+                object: nil,
+                userInfo: ["unread": unread]
+            )
 
-            // Notyfikacja tylko, gdy licznik rośnie (prosta heurystyka)
             if unread > lastUnread {
                 sendNotification(unread: unread)
             }
             lastUnread = unread
         }
 
+        private static let leadingUnreadRegex = try! NSRegularExpression(pattern: #"^\((\d+)\)"#)
+        private static let trailingUnreadRegex = try! NSRegularExpression(pattern: #"\((\d+)\)\s*$"#)
+
         // MARK: - Dock badge
         private func updateDockBadge(_ unread: Int) {
             DispatchQueue.main.async {
                 NSApp.dockTile.badgeLabel = unread > 0 ? "\(unread)" : nil
+                NSApp.dockTile.display()
             }
         }
 
