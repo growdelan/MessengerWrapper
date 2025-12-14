@@ -30,6 +30,9 @@ Konfiguracja: `MessengerWrapper.xcodeproj`; testy w `MessengerWrapperTests/` (ta
 - PR: krótki opis, motywacja/problem, kroki weryfikacji (build/test), zrzuty ekranu przy zmianach UI.
 - Linkuj zadania/issue; zaznacz znane ograniczenia/regresje.
 
+## CI/CD i wydania
+- Release workflow: `.github/workflows/release.yml` uruchamia się na tagach `v*`, buduje schemat `MessengerWrapper` w konfiguracji Release na `macos-latest` (bez podpisu), pakuje `.app` do `MessengerWrapper-macos.zip` i publikuje jako asset na GitHub Release (softprops/action-gh-release, `secrets.GITHUB_TOKEN`, `contents: write`).
+
 ## Uwagi platformowe i bezpieczeństwo
 - Aplikacja korzysta z WebKit, powiadomień i badge Docka; pamiętaj o aktualizacji `allowedHosts` w `MessengerWebView.swift` przy zmianach routingu.
 - Licznik nieprzeczytanych jest odświeżany natywnie (polling `document.title`) i rozsyłany przez `NotificationCenter` (`messengerWrapper.unreadCountDidChange`) do UI status bar oraz Dock badge.
