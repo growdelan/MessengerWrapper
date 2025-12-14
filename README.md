@@ -2,6 +2,10 @@
 
 Lekka aplikacja macOS, która owija `messenger.com` w natywne okno SwiftUI/WebKit, dodając badge w Docku, integrację z paskiem menu i powiadomienia lokalne.
 
+<p align="center">
+  <img src="images/messengerwrapper.png" alt="Logo" width="300">
+</p>
+
 ## Funkcje
 - Natywne okno SwiftUI z WebKit (bez Electron).
 - Ikona template w pasku menu + licznik nieprzeczytanych obok niej; menu z akcjami pokaż/zakończ.
