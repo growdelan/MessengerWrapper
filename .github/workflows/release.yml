@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write   # <-- kluczowe: pozwala tworzyć release i uploadować assety
+
 jobs:
   build-and-release:
     runs-on: macos-latest
@@ -12,9 +15,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
 
       - name: Build .app (Release)
         env:
