@@ -15,7 +15,7 @@ Lekka aplikacja macOS, która owija `messenger.com` w natywne okno SwiftUI/WebKi
 
 ## Instalacja
 
-Paczka zip z [Releases](https://github.com/growdelan/MessengerWrapper/releases)
+Paczka zip z [Releases](https://github.com/growdelan/MessengerWrapper/releases)  
 Rozpoakować do `/Applications/` 
 
 ## Wymagania do samodzielnego budowania
