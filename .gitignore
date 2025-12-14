@@ -1,0 +1,17 @@
+# Xcode
+DerivedData/
+Build/
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store
+
+# Swift Package Manager (jeśli kiedyś użyjesz)
+.build/
+
+# App bundles
+*.app
+
+# Logs
+*.log
