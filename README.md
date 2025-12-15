@@ -42,4 +42,5 @@ Alternatywnie z CLI:
 
 ## Dostosowanie
 - Dozwolone hosty linków zewnętrznych znajdują się w `MessengerWebView.swift` (`allowedHosts`); aktualizuj przy zmianach routingu.
-- Licznik nieprzeczytanych jest parsowany natywnie z `document.title` (regex na formatach `(3) Messenger`/`Messenger (3)`); dostrój, jeśli Messenger zmieni tytuł.
+- Licznik nieprzeczytanych jest wykrywany event-driven przez wstrzyknięty `WKUserScript` (obserwacja zmian tytułu/DOM przez `MutationObserver`) i przekazywany do natywnego kodu przez `WKScriptMessageHandler`; parsowanie bazuje na `document.title` (regex na formatach `(3) Messenger`/`Messenger (3)`), dostrój jeśli Messenger zmieni tytuł.
+

@@ -10,6 +10,19 @@ struct MessengerWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default() // trzyma cookies/sesję
 
+        // Event-driven unread count: JS -> native (WKScriptMessageHandler)
+        let ucc = WKUserContentController()
+        ucc.add(context.coordinator, name: Coordinator.unreadMessageHandlerName)
+
+        let script = WKUserScript(
+            source: Coordinator.unreadObserverUserScriptSource,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true,
+            in: .page
+        )
+        ucc.addUserScript(script)
+        config.userContentController = ucc
+
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
@@ -28,11 +41,11 @@ struct MessengerWebView: NSViewRepresentable {
         Coordinator()
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         private weak var webView: WKWebView?
-        private var pollTimer: Timer?
         private var lastUnread: Int = 0
         private var notificationPermissionAsked = false
+
         private let allowedHosts: Set<String> = [
             "www.messenger.com",
             "messenger.com",
@@ -42,8 +55,11 @@ struct MessengerWebView: NSViewRepresentable {
             "scontent.xx.fbcdn.net"  // czasem zasoby
         ]
 
+        static let unreadMessageHandlerName = "mwUnreadCount"
+
         deinit {
-            pollTimer?.invalidate()
+            // Bezpiecznie usuń handler (WKUserContentController trzyma strong ref do handlera)
+            webView?.configuration.userContentController.removeScriptMessageHandler(forName: Self.unreadMessageHandlerName)
         }
 
         func attach(webView: WKWebView) {
@@ -53,7 +69,7 @@ struct MessengerWebView: NSViewRepresentable {
         // MARK: - WKNavigationDelegate
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             requestNotificationsIfNeeded()
-            startUnreadPollingIfNeeded()
+            // Zamiast pollingu: unread przychodzi event-driven z WKUserScript.
         }
 
         // MARK: - WKUIDelegate (otwieranie nowych okienek jako nowe karty/okna)
@@ -95,30 +111,46 @@ struct MessengerWebView: NSViewRepresentable {
             decisionHandler(.allow)
         }
 
-        // MARK: - Unread polling (native)
-        private func startUnreadPollingIfNeeded() {
-            guard pollTimer == nil else { return }
-            guard let webView else { return }
+        // MARK: - WKScriptMessageHandler (event-driven unread)
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == Self.unreadMessageHandlerName else { return }
 
-            let timer = Timer(timeInterval: 5.0, repeats: true) { [weak self, weak webView] _ in
-                guard let self, let webView else { return }
-                self.pollUnreadCount(using: webView)
+            var unread: Int?
+            var titleFallback: String?
+
+            if let dict = message.body as? [String: Any] {
+                if let v = dict["unread"] as? Int {
+                    unread = v
+                } else if let v = dict["unread"] as? Double {
+                    unread = Int(v)
+                } else if let v = dict["unread"] as? String {
+                    unread = Int(v)
+                }
+
+                if let t = dict["title"] as? String {
+                    titleFallback = t
+                }
+            } else if let v = message.body as? Int {
+                unread = v
+            } else if let v = message.body as? Double {
+                unread = Int(v)
+            } else if let v = message.body as? String {
+                unread = Int(v)
             }
-            pollTimer = timer
-            RunLoop.main.add(timer, forMode: .common)
 
-            pollUnreadCount(using: webView)
+            let finalUnread: Int
+            if let unread {
+                finalUnread = max(0, unread)
+            } else if let titleFallback {
+                finalUnread = parseUnreadFromTitle(titleFallback)
+            } else {
+                return
+            }
+
+            handleUnreadUpdate(finalUnread)
         }
 
-        private func pollUnreadCount(using webView: WKWebView) {
-            webView.evaluateJavaScript("document.title") { [weak self] result, _ in
-                guard let self else { return }
-                guard let title = result as? String else { return }
-                let unread = self.parseUnreadFromTitle(title)
-                self.handleUnreadUpdate(unread)
-            }
-        }
-
+        // MARK: - Unread parsing (fallback / compatibility)
         private func parseUnreadFromTitle(_ title: String) -> Int {
             let nsRange = NSRange(title.startIndex..<title.endIndex, in: title)
 
@@ -138,6 +170,9 @@ struct MessengerWebView: NSViewRepresentable {
         }
 
         private func handleUnreadUpdate(_ unread: Int) {
+            // Unikaj zbędnych cykli/odświeżeń gdy nic się nie zmieniło
+            guard unread != lastUnread else { return }
+
             updateDockBadge(unread)
             NotificationCenter.default.post(
                 name: .messengerWrapperUnreadCountDidChange,
@@ -185,5 +220,114 @@ struct MessengerWebView: NSViewRepresentable {
                                                 trigger: nil)
             UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
         }
+
+        // MARK: - Injected JS (MutationObserver -> postMessage)
+        static let unreadObserverUserScriptSource: String = """
+        (function () {
+          'use strict';
+
+          const HANDLER = '\(Coordinator.unreadMessageHandlerName)';
+
+          function parseUnread(title) {
+            if (!title) return 0;
+
+            // "(3) Messenger"
+            let m = title.match(/^\\((\\d+)\\)/);
+            if (m && m[1]) return parseInt(m[1], 10) || 0;
+
+            // "Messenger (3)"
+            m = title.match(/\\((\\d+)\\)\\s*$/);
+            if (m && m[1]) return parseInt(m[1], 10) || 0;
+
+            return 0;
+          }
+
+          let lastSent = null;
+          let titleObserver = null;
+          let observedTitleEl = null;
+          let headObserver = null;
+
+          function post(unread, title) {
+            try {
+              const mh = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[HANDLER];
+              if (!mh || !mh.postMessage) return;
+
+              // prosta deduplikacja po stronie JS
+              if (lastSent === unread) return;
+              lastSent = unread;
+
+              mh.postMessage({ unread: unread, title: title });
+            } catch (_) {}
+          }
+
+          function emitFromDocumentTitle() {
+            try {
+              const title = document.title || '';
+              const unread = parseUnread(title);
+              post(unread, title);
+            } catch (_) {}
+          }
+
+          function attachToTitleEl() {
+            const titleEl = document.querySelector('title');
+            if (!titleEl) return false;
+
+            if (titleEl === observedTitleEl) return true;
+
+            observedTitleEl = titleEl;
+
+            if (titleObserver) {
+              try { titleObserver.disconnect(); } catch (_) {}
+            }
+
+            titleObserver = new MutationObserver(function () {
+              emitFromDocumentTitle();
+            });
+
+            try {
+              titleObserver.observe(titleEl, { childList: true, subtree: true, characterData: true });
+            } catch (_) {}
+
+            return true;
+          }
+
+          function ensureHeadObserver() {
+            if (headObserver) return;
+
+            const target = document.head || document.documentElement;
+            if (!target) return;
+
+            headObserver = new MutationObserver(function () {
+              // jeśli <title> zostało podmienione — podepnij obserwator ponownie
+              attachToTitleEl();
+            });
+
+            try {
+              headObserver.observe(target, { childList: true, subtree: true });
+            } catch (_) {}
+          }
+
+          function start() {
+            // pierwsza emisja (żeby badge od razu się ustawił)
+            emitFromDocumentTitle();
+
+            // obserwuj zmiany tytułu
+            attachToTitleEl();
+            ensureHeadObserver();
+
+            // fallback: jeśli <title> jeszcze nie ma, spróbuj po załadowaniu DOM
+            if (!observedTitleEl) {
+              document.addEventListener('DOMContentLoaded', function () {
+                attachToTitleEl();
+                ensureHeadObserver();
+                emitFromDocumentTitle();
+              }, { once: true });
+            }
+          }
+
+          start();
+        })();
+        """
     }
 }
+

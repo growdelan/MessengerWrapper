@@ -35,8 +35,9 @@ Konfiguracja: `MessengerWrapper.xcodeproj`; testy w `MessengerWrapperTests/` (ta
 
 ## Uwagi platformowe i bezpieczeństwo
 - Aplikacja korzysta z WebKit, powiadomień i badge Docka; pamiętaj o aktualizacji `allowedHosts` w `MessengerWebView.swift` przy zmianach routingu.
-- Licznik nieprzeczytanych jest odświeżany natywnie (polling `document.title`) i rozsyłany przez `NotificationCenter` (`messengerWrapper.unreadCountDidChange`) do UI status bar oraz Dock badge.
+- Licznik nieprzeczytanych jest wykrywany event-driven przez wstrzyknięty `WKUserScript` (obserwacja zmian tytułu/DOM przez `MutationObserver`) i wysyłany do natywnego kodu przez `WKScriptMessageHandler`, a następnie rozsyłany przez `NotificationCenter` (`messengerWrapper.unreadCountDidChange`) do UI status bar oraz Dock badge.
 - Ikona paska menu to template `MenuBarIcon` z asset catalogu; liczba nieprzeczytanych dodawana jest w tytule obok ikony (status item ma `variableLength`).
 - WebKit może logować ostrzeżenia o braku entitlements dla “WebKit Media Playback” — zazwyczaj są nieszkodliwe, o ile nie używasz rozmów audio/wideo.
 - Nie commituj prywatnych tokenów ani danych logowania; cookies i sesje są trzymane lokalnie w `WKWebsiteDataStore.default()`.
 - Przy zmianach polityki powiadomień lub ikon status bar zadbaj o zachowanie dotychczasowego UX (status bar + okno możliwe do ukrycia).
+
